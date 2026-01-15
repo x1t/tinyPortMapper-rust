@@ -3,13 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write # 允许创建 Release
 
 jobs:
   check:
@@ -42,11 +45,17 @@ jobs:
           targets: ${{ matrix.target }}
           profile: release
 
+      - name: Package binaries
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf tinymapper-${{ matrix.target }}.tar.gz tinymapper
+          mv tinymapper-${{ matrix.target }}.tar.gz ${{ github.workspace }}/
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/tinymapper*
-          retention-days: 1
+          name: tinymapper-${{ matrix.target }}
+          path: tinymapper-${{ matrix.target }}.tar.gz
+          retention-days: 7
 
   release:
     needs: build
@@ -62,12 +71,18 @@ jobs:
         with:
           path: artifacts
 
+      - name: Prepare release files
+        run: |
+          mkdir -p release-files
+          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
+          ls -lh release-files/
+
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.tar.gz
+          files: release-files/*.tar.gz
           draft: false
           prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
