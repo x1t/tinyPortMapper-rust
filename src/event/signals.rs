@@ -44,7 +44,7 @@ impl SignalHandler {
 
                 loop {
                     let mut sig: libc::c_int = 0;
-                    let ret = unsafe { libc::sigwait(&mut sigset, &mut sig) };
+                    let ret = unsafe { libc::sigwait(&sigset, &mut sig) };
 
                     if ret != 0 {
                         std::thread::sleep(std::time::Duration::from_millis(100));
