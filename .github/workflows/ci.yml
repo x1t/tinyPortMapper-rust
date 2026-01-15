@@ -45,16 +45,16 @@ jobs:
           targets: ${{ matrix.target }}
           profile: release
 
-      - name: Package binaries
+      - name: Rename binary
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf tinyportmapper-${{ matrix.target }}.tar.gz tinyportmapper
-          mv tinyportmapper-${{ matrix.target }}.tar.gz ${{ github.workspace }}/
+          mv tinyportmapper tinyportmapper-${{ matrix.target }}
+          mv tinyportmapper-${{ matrix.target }} ${{ github.workspace }}/
 
       - uses: actions/upload-artifact@v4
         with:
           name: tinyportmapper-${{ matrix.target }}
-          path: tinyportmapper-${{ matrix.target }}.tar.gz
+          path: tinyportmapper-${{ matrix.target }}
           retention-days: 7
 
   release:
@@ -74,13 +74,13 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
+          find artifacts -type f -name "tinyportmapper-*" -exec cp {} release-files/ \;
           ls -lh release-files/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-files/*.tar.gz
+          files: release-files/tinyportmapper-*
           draft: false
           prerelease: false
           generate_release_notes: true
