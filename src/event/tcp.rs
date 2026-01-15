@@ -566,8 +566,54 @@ impl TcpHandler {
         TrafficStats::global().add_tcp_sent(send_len as usize);
 
         if send_len > 0 {
+            // 成功发送部分数据
             my_endpoint.data_len = my_endpoint.data_len.saturating_sub(send_len as usize);
             my_endpoint.begin += send_len as usize;
+        } else if send_len == 0 {
+            // send_len == 0 表示对端关闭了连接
+            // 关闭连接并清理资源
+            info!(
+                "[tcp] send_len==0, peer closed connection {}, closing",
+                conn_addr_s
+            );
+            drop(conn_guard);
+            self.close_connection(
+                event_loop,
+                fd64,
+                other_endpoint_fd64,
+                my_fd,
+                other_fd_send,
+                &conn_addr_s,
+            );
+            tcp_manager.erase(&fd64);
+            return Ok(());
+        } else {
+            // send_len < 0 表示发送错误
+            let err = std::io::Error::last_os_error();
+            if err.kind() == std::io::ErrorKind::WouldBlock {
+                // 发送缓冲区满，注册 WRITABLE 事件后继续
+                debug!(
+                    "[tcp] send would block in on_read, connection {}",
+                    conn_addr_s
+                );
+            } else {
+                // 其他错误，关闭连接
+                info!(
+                    "[tcp] send error in on_read: {}, connection {} closed",
+                    err, conn_addr_s
+                );
+                drop(conn_guard);
+                self.close_connection(
+                    event_loop,
+                    fd64,
+                    other_endpoint_fd64,
+                    my_fd,
+                    other_fd_send,
+                    &conn_addr_s,
+                );
+                tcp_manager.erase(&fd64);
+                return Ok(());
+            }
         }
 
         if my_endpoint.data_len > 0 {
