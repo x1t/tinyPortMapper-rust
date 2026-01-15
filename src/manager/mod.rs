@@ -82,7 +82,11 @@ impl TcpConnectionManager {
 
     /// 获取连接
     pub fn get_connection(&self, fd64: &Fd64) -> Option<Arc<RwLock<TcpConnection>>> {
-        self.connections.read().expect("RwLock poisoned").get(fd64).cloned()
+        self.connections
+            .read()
+            .expect("RwLock poisoned")
+            .get(fd64)
+            .cloned()
     }
 
     /// 通过任意 fd64（local 或 remote）获取连接
@@ -262,14 +266,22 @@ impl UdpSessionManager {
 
     /// 获取会话
     pub fn get_session(&self, address: &Address) -> Option<Arc<RwLock<UdpSession>>> {
-        self.sessions.read().expect("RwLock poisoned").get(address).cloned()
+        self.sessions
+            .read()
+            .expect("RwLock poisoned")
+            .get(address)
+            .cloned()
     }
 
     /// 通过 fd64 获取会话 (O(1) 查找)
     pub fn get_session_by_fd64(&self, fd64: &Fd64) -> Option<Arc<RwLock<UdpSession>>> {
         let fd64_to_addr = self.fd64_to_addr.read().expect("RwLock poisoned");
         if let Some(addr) = fd64_to_addr.get(fd64) {
-            self.sessions.read().expect("RwLock poisoned").get(addr).cloned()
+            self.sessions
+                .read()
+                .expect("RwLock poisoned")
+                .get(addr)
+                .cloned()
         } else {
             None
         }
@@ -397,8 +409,14 @@ mod tests {
     fn test_tcp_connection_manager() {
         let manager = TcpConnectionManager::new(Duration::from_secs(60), 30, 1, false);
 
-        let _conn =
-            manager.new_connection(Fd64(1), Fd64(2), "127.0.0.1:12345".to_string(), 1000, 16384, false);
+        let _conn = manager.new_connection(
+            Fd64(1),
+            Fd64(2),
+            "127.0.0.1:12345".to_string(),
+            1000,
+            16384,
+            false,
+        );
 
         assert_eq!(manager.len(), 1);
         assert!(manager.get_connection(&Fd64(1)).is_some());

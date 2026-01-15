@@ -451,7 +451,9 @@ mod tests {
 
     #[test]
     fn test_ipv4_parse() {
-        let addr = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
+        let addr = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
         assert_eq!(addr.get_type(), ADDR_TYPE_IPV4);
         assert_eq!(addr.port(), 8080);
         assert_eq!(addr.to_string(), "127.0.0.1:8080");
@@ -459,7 +461,9 @@ mod tests {
 
     #[test]
     fn test_ipv6_parse() {
-        let addr = "[::1]:8080".parse::<Address>().expect("Option unwrap failed");
+        let addr = "[::1]:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
         assert_eq!(addr.get_type(), ADDR_TYPE_IPV6);
         assert_eq!(addr.port(), 8080);
         assert_eq!(addr.to_string(), "[::1]:8080");
@@ -505,8 +509,12 @@ mod tests {
 
     #[test]
     fn test_hash() {
-        let addr1 = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
-        let addr2 = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
+        let addr1 = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
+        let addr2 = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         addr1.hash(&mut hasher);
         let hash1 = hasher.finish();
@@ -518,17 +526,27 @@ mod tests {
 
     #[test]
     fn test_eq() {
-        let addr1 = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
-        let addr2 = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
-        let addr3 = "127.0.0.1:9090".parse::<Address>().expect("Option unwrap failed");
+        let addr1 = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
+        let addr2 = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
+        let addr3 = "127.0.0.1:9090"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
         assert_eq!(addr1, addr2);
         assert_ne!(addr1, addr3);
     }
 
     #[test]
     fn test_address_len() {
-        let ipv4 = "127.0.0.1:8080".parse::<Address>().expect("Option unwrap failed");
-        let ipv6 = "[::1]:8080".parse::<Address>().expect("Option unwrap failed");
+        let ipv4 = "127.0.0.1:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
+        let ipv6 = "[::1]:8080"
+            .parse::<Address>()
+            .expect("Option unwrap failed");
         assert_eq!(ipv4.get_len(), std::mem::size_of::<libc::sockaddr_in>());
         assert_eq!(ipv6.get_len(), std::mem::size_of::<libc::sockaddr_in6>());
     }
@@ -562,7 +580,9 @@ mod tests {
     #[test]
     fn test_non_mapped_ipv6() {
         // Regular IPv6 should not be converted
-        let ipv6: Address = "[2001:db8::1]:8080".parse().expect("Address parsing failed");
+        let ipv6: Address = "[2001:db8::1]:8080"
+            .parse()
+            .expect("Address parsing failed");
         let ipv4 = ipv6.from_ipv4_mapped_ipv6();
         assert!(ipv4.is_none());
     }

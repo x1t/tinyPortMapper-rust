@@ -218,8 +218,13 @@ impl EventLoop {
             if event_count > 0 {
                 debug!("[event] poll returned, events.count={}", event_count);
                 for (i, event) in events.iter().enumerate() {
-                    debug!("[event][{}] token={:?}, readable={}, writable={}",
-                           i, event.token(), event.is_readable(), event.is_writable());
+                    debug!(
+                        "[event][{}] token={:?}, readable={}, writable={}",
+                        i,
+                        event.token(),
+                        event.is_readable(),
+                        event.is_writable()
+                    );
                 }
             }
             match poll_result {
@@ -324,7 +329,11 @@ impl EventLoop {
         info!("[event] shutting down...");
 
         {
-            let connections = self.tcp_manager.connections.write().expect("RwLock poisoned");
+            let connections = self
+                .tcp_manager
+                .connections
+                .write()
+                .expect("RwLock poisoned");
             for (fd64, conn) in connections.iter() {
                 let conn_guard = conn.read().expect("RwLock poisoned");
                 if let Some(raw_fd) = self.fd_manager.to_fd(*fd64) {

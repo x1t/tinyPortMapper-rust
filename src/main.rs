@@ -124,11 +124,26 @@ fn print_help() {
     );
     println!("    -e <interface>                        bind to specified interface");
     println!("    -d                                    enable UDP fragment forwarding");
-    println!("    --max-connections      <number>       max connections, default: {}", DEFAULT_MAX_CONNECTIONS);
-    println!("    --tcp-timeout          <number>       TCP connection timeout in seconds, default: {}", DEFAULT_TCP_TIMEOUT_MS / 1000);
-    println!("    --udp-timeout          <number>       UDP session timeout in seconds, default: {}", DEFAULT_UDP_TIMEOUT_MS / 1000);
-    println!("    --conn-clear-ratio     <number>       connection clear ratio, default: {}", DEFAULT_CONN_CLEAR_RATIO);
-    println!("    --conn-clear-min       <number>       min connections to clear each time, default: {}", DEFAULT_CONN_CLEAR_MIN);
+    println!(
+        "    --max-connections      <number>       max connections, default: {}",
+        DEFAULT_MAX_CONNECTIONS
+    );
+    println!(
+        "    --tcp-timeout          <number>       TCP connection timeout in seconds, default: {}",
+        DEFAULT_TCP_TIMEOUT_MS / 1000
+    );
+    println!(
+        "    --udp-timeout          <number>       UDP session timeout in seconds, default: {}",
+        DEFAULT_UDP_TIMEOUT_MS / 1000
+    );
+    println!(
+        "    --conn-clear-ratio     <number>       connection clear ratio, default: {}",
+        DEFAULT_CONN_CLEAR_RATIO
+    );
+    println!(
+        "    --conn-clear-min       <number>       min connections to clear each time, default: {}",
+        DEFAULT_CONN_CLEAR_MIN
+    );
     println!("    --disable-conn-clear                   disable automatic connection clearing");
     println!("    --run-test                            run unit tests");
     println!("    -h,--help                             print this help message");

@@ -220,7 +220,10 @@ impl TcpHandler {
         let remote_fd = unsafe {
             let fd = libc::socket(remote_addr_family, libc::SOCK_STREAM, 0);
             if fd < 0 {
-                warn!("[tcp] create remote socket failed, errno={}", crate::get_sock_error());
+                warn!(
+                    "[tcp] create remote socket failed, errno={}",
+                    crate::get_sock_error()
+                );
                 // 与 C++ 版本保持一致：关闭客户端 socket
                 drop(stream);
                 return Ok(());
@@ -363,9 +366,14 @@ impl TcpHandler {
         };
 
         let conn_guard = connection_arc.read().expect("connection poisoned");
-        debug!("[tcp] on_read: fd64={:?}, local={:?}, remote={:?}, is_remote={}, remote_connecting={}",
-               fd64, conn_guard.local.fd64, conn_guard.remote.fd64,
-               fd64 == conn_guard.remote.fd64, conn_guard.remote_connecting);
+        debug!(
+            "[tcp] on_read: fd64={:?}, local={:?}, remote={:?}, is_remote={}, remote_connecting={}",
+            fd64,
+            conn_guard.local.fd64,
+            conn_guard.remote.fd64,
+            fd64 == conn_guard.remote.fd64,
+            conn_guard.remote_connecting
+        );
 
         // 检查是否是远程端且仍在连接中（连接完成事件）
         if fd64 == conn_guard.remote.fd64 && conn_guard.remote_connecting {
@@ -410,7 +418,10 @@ impl TcpHandler {
                     Some(fd) => fd,
                     None => return Ok(()),
                 };
-                warn!("[tcp] connection failed, error={}, closing {}", error, conn_addr_s);
+                warn!(
+                    "[tcp] connection failed, error={}, closing {}",
+                    error, conn_addr_s
+                );
                 drop(conn_guard);
                 self.close_connection(event_loop, fd64, other_fd64, my_fd, other_fd, &conn_addr_s);
                 tcp_manager.erase(&fd64);
@@ -473,7 +484,10 @@ impl TcpHandler {
         };
 
         if my_endpoint.data_len != 0 {
-            debug!("[tcp] data_len={} != 0, skipping recv", my_endpoint.data_len);
+            debug!(
+                "[tcp] data_len={} != 0, skipping recv",
+                my_endpoint.data_len
+            );
             return Ok(());
         }
 
@@ -489,7 +503,10 @@ impl TcpHandler {
         // 更新接收统计
         TrafficStats::global().add_tcp_received(recv_len as usize);
 
-        debug!("[tcp] recv from {}, recv_len={}, remote_connecting={}", conn_addr_s, recv_len, remote_connecting);
+        debug!(
+            "[tcp] recv from {}, recv_len={}, remote_connecting={}",
+            conn_addr_s, recv_len, remote_connecting
+        );
 
         if recv_len == 0 {
             // 与 C++ 版本保持一致：打印 recv_len 和 closed bc of EOF
@@ -540,7 +557,10 @@ impl TcpHandler {
             )
         };
 
-        debug!("[tcp] send to {}, send_len={}, data_len={}", conn_addr_s, send_len, my_endpoint.data_len);
+        debug!(
+            "[tcp] send to {}, send_len={}, data_len={}",
+            conn_addr_s, send_len, my_endpoint.data_len
+        );
 
         // 更新发送统计
         TrafficStats::global().add_tcp_sent(send_len as usize);
@@ -551,7 +571,10 @@ impl TcpHandler {
         }
 
         if my_endpoint.data_len > 0 {
-            let token = token_manager.read().expect("token_manager poisoned").get_token(&fd64);
+            let token = token_manager
+                .read()
+                .expect("token_manager poisoned")
+                .get_token(&fd64);
             if let Some(tok) = token {
                 let fd = match fd_manager.to_fd(fd64) {
                     Some(f) => f,
@@ -628,7 +651,10 @@ impl TcpHandler {
                 debug!("[tcp] connection established (writable), fd={}", fd);
 
                 // 切换为仅 READABLE 事件
-                let token = token_manager.read().expect("token_manager poisoned").get_token(&fd64);
+                let token = token_manager
+                    .read()
+                    .expect("token_manager poisoned")
+                    .get_token(&fd64);
                 if let Some(tok) = token {
                     let fd = match fd_manager.to_fd(fd64) {
                         Some(f) => f,
@@ -637,8 +663,9 @@ impl TcpHandler {
                     #[cfg(unix)]
                     let mut stream = unsafe { TcpStream::from_raw_fd(fd) };
                     #[cfg(windows)]
-                    let mut stream =
-                        unsafe { TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket) };
+                    let mut stream = unsafe {
+                        TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket)
+                    };
                     poll.registry()
                         .reregister(&mut stream, tok, Interest::READABLE)
                         .ok();
@@ -651,7 +678,10 @@ impl TcpHandler {
                 // 连接完成，现在尝试读取本地端的数据
                 // 因为在连接过程中可能已经有数据到达
                 let local_fd64 = conn_guard.local.fd64;
-                debug!("[tcp] connection established, trying to read local data, local_fd64={:?}", local_fd64);
+                debug!(
+                    "[tcp] connection established, trying to read local data, local_fd64={:?}",
+                    local_fd64
+                );
                 drop(conn_guard); // 释放锁
                 let _ = self.on_read(event_loop, _token, local_fd64);
 
@@ -666,7 +696,10 @@ impl TcpHandler {
                     Some(fd) => fd,
                     None => return Ok(()),
                 };
-                warn!("[tcp] connection failed (writable), error={}, closing {}", error, conn_addr_s);
+                warn!(
+                    "[tcp] connection failed (writable), error={}, closing {}",
+                    error, conn_addr_s
+                );
                 drop(conn_guard);
                 self.close_connection(event_loop, fd64, other_fd64, my_fd, other_fd, &conn_addr_s);
                 tcp_manager.erase(&fd64);
@@ -749,7 +782,10 @@ impl TcpHandler {
             } else {
                 // 有 pending 数据，但 send 返回 0 (可能是缓冲区满)
                 // 重新注册 WRITABLE 事件
-                let token = token_manager.read().expect("token_manager poisoned").get_token(&fd64);
+                let token = token_manager
+                    .read()
+                    .expect("token_manager poisoned")
+                    .get_token(&fd64);
                 if let Some(tok) = token {
                     let fd = match fd_manager.to_fd(fd64) {
                         Some(f) => f,
@@ -761,8 +797,9 @@ impl TcpHandler {
                     #[cfg(unix)]
                     let mut stream = unsafe { TcpStream::from_raw_fd(fd) };
                     #[cfg(windows)]
-                    let mut stream =
-                        unsafe { TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket) };
+                    let mut stream = unsafe {
+                        TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket)
+                    };
                     poll.registry()
                         .reregister(&mut stream, tok, Interest::READABLE | Interest::WRITABLE)
                         .ok();
@@ -780,9 +817,15 @@ impl TcpHandler {
             let err = std::io::Error::last_os_error();
             // 检查是否是 EAGAIN/EWOULDBLOCK（正常情况，非阻塞 socket 缓冲区满时）
             if err.kind() == std::io::ErrorKind::WouldBlock {
-                debug!("[tcp] send would block, connection {}, re-registering writable", conn_addr_s);
+                debug!(
+                    "[tcp] send would block, connection {}, re-registering writable",
+                    conn_addr_s
+                );
                 // 重新注册 WRITABLE 事件，以便在 socket 可写时继续发送
-                let token = token_manager.read().expect("token_manager poisoned").get_token(&fd64);
+                let token = token_manager
+                    .read()
+                    .expect("token_manager poisoned")
+                    .get_token(&fd64);
                 if let Some(tok) = token {
                     let fd = match fd_manager.to_fd(fd64) {
                         Some(f) => f,
@@ -794,8 +837,9 @@ impl TcpHandler {
                     #[cfg(unix)]
                     let mut stream = unsafe { TcpStream::from_raw_fd(fd) };
                     #[cfg(windows)]
-                    let mut stream =
-                        unsafe { TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket) };
+                    let mut stream = unsafe {
+                        TcpStream::from_raw_socket(fd as std::os::windows::io::RawSocket)
+                    };
                     poll.registry()
                         .reregister(&mut stream, tok, Interest::READABLE | Interest::WRITABLE)
                         .ok();
@@ -821,10 +865,12 @@ impl TcpHandler {
         // 更新当前端的状态
         if send_len > 0 {
             if is_local {
-                conn_guard.local.data_len = conn_guard.local.data_len.saturating_sub(send_len as usize);
+                conn_guard.local.data_len =
+                    conn_guard.local.data_len.saturating_sub(send_len as usize);
                 conn_guard.local.begin += send_len as usize;
             } else {
-                conn_guard.remote.data_len = conn_guard.remote.data_len.saturating_sub(send_len as usize);
+                conn_guard.remote.data_len =
+                    conn_guard.remote.data_len.saturating_sub(send_len as usize);
                 conn_guard.remote.begin += send_len as usize;
             }
         }
@@ -836,7 +882,10 @@ impl TcpHandler {
         };
 
         if pending_len == 0 {
-            let token = token_manager.read().expect("token_manager poisoned").get_token(&fd64);
+            let token = token_manager
+                .read()
+                .expect("token_manager poisoned")
+                .get_token(&fd64);
             if let Some(tok) = token {
                 let fd = match fd_manager.to_fd(fd64) {
                     Some(f) => f,

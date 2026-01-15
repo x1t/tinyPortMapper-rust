@@ -74,9 +74,18 @@ impl FdManager {
 
     /// 预分配容量
     pub fn reserve(&self, capacity: usize) {
-        self.fd_to_fd64.write().expect("RwLock poisoned").reserve(capacity);
-        self.fd64_to_fd.write().expect("RwLock poisoned").reserve(capacity);
-        self.fd_info.write().expect("RwLock poisoned").reserve(capacity);
+        self.fd_to_fd64
+            .write()
+            .expect("RwLock poisoned")
+            .reserve(capacity);
+        self.fd64_to_fd
+            .write()
+            .expect("RwLock poisoned")
+            .reserve(capacity);
+        self.fd_info
+            .write()
+            .expect("RwLock poisoned")
+            .reserve(capacity);
     }
 
     /// 从 RawFd 创建 Fd64
@@ -96,22 +105,36 @@ impl FdManager {
 
     /// 将 Fd64 转换为 RawFd
     pub fn to_fd(&self, fd64: Fd64) -> Option<RawFd> {
-        self.fd64_to_fd.read().expect("RwLock poisoned").get(&fd64).copied()
+        self.fd64_to_fd
+            .read()
+            .expect("RwLock poisoned")
+            .get(&fd64)
+            .copied()
     }
 
     /// 检查 Fd64 是否存在
     pub fn exist(&self, fd64: Fd64) -> bool {
-        self.fd64_to_fd.read().expect("RwLock poisoned").contains_key(&fd64)
+        self.fd64_to_fd
+            .read()
+            .expect("RwLock poisoned")
+            .contains_key(&fd64)
     }
 
     /// 获取 FD 信息
     pub fn get_info(&self, fd64: &Fd64) -> Option<FdInfo> {
-        self.fd_info.read().expect("RwLock poisoned").get(fd64).cloned()
+        self.fd_info
+            .read()
+            .expect("RwLock poisoned")
+            .get(fd64)
+            .cloned()
     }
 
     /// 检查 FD 信息是否存在
     pub fn exist_info(&self, fd64: &Fd64) -> bool {
-        self.fd_info.read().expect("RwLock poisoned").contains_key(fd64)
+        self.fd_info
+            .read()
+            .expect("RwLock poisoned")
+            .contains_key(fd64)
     }
 
     /// 关闭并清理 Fd64

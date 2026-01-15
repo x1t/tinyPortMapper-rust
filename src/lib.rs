@@ -17,7 +17,9 @@ pub mod types;
 include!(concat!(env!("OUT_DIR"), "/build.rs"));
 
 pub use fd_manager::{Fd64, FdManager};
-pub use log::{get_current_time, is_about_to_exit, LogLevel, Logger, MY_DEBUG_MODE, set_about_to_exit};
+pub use log::{
+    get_current_time, is_about_to_exit, set_about_to_exit, LogLevel, Logger, MY_DEBUG_MODE,
+};
 
 // 跨平台 RawFd 类型别名（定义在开头供其他函数使用）
 #[cfg(unix)]
@@ -606,8 +608,7 @@ pub fn get_u64_l(a: u64) -> u32 {
 /// 64位伪随机数生成器
 ///
 /// 使用线性同余生成器 (LCG) 实现，与 C++ 版本保持一致
-static RANDOM_STATE: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static RANDOM_STATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// 初始化随机数生成器
 ///
@@ -615,14 +616,12 @@ static RANDOM_STATE: std::sync::atomic::AtomicU64 =
 pub fn init_random_number_fd() {
     // 使用当前时间和一些随机源初始化
     let seed = get_current_time_us()
-        .wrapping_add(
-            std::process::id() as u64
-        )
+        .wrapping_add(std::process::id() as u64)
         .wrapping_add(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs()
+                .as_secs(),
         );
     RANDOM_STATE.store(seed, std::sync::atomic::Ordering::Relaxed);
 }
@@ -636,11 +635,8 @@ pub fn get_fake_random_number_64() -> u64 {
     const MULTIPLIER: u64 = 6364136223846793005;
     const INCREMENT: u64 = 1442695040888963407;
 
-    let state = RANDOM_STATE
-        .load(std::sync::atomic::Ordering::Relaxed);
-    let new_state = state
-        .wrapping_mul(MULTIPLIER)
-        .wrapping_add(INCREMENT);
+    let state = RANDOM_STATE.load(std::sync::atomic::Ordering::Relaxed);
+    let new_state = state.wrapping_mul(MULTIPLIER).wrapping_add(INCREMENT);
     RANDOM_STATE.store(new_state, std::sync::atomic::Ordering::Relaxed);
 
     // 增加一些熵：混合时间戳
@@ -801,10 +797,7 @@ mod random_tests {
         assert_eq!(chars.len(), 32);
         // 验证只包含字母数字字符
         for c in chars.chars() {
-            assert!(
-                c.is_ascii_alphanumeric(),
-                "Invalid character: {}", c
-            );
+            assert!(c.is_ascii_alphanumeric(), "Invalid character: {}", c);
         }
     }
 

@@ -4,7 +4,7 @@
 //! 使用原始 libc 调用，避免 signal_hook 库的兼容性问题
 
 use crate::info;
-use libc::{SIG_DFL, SIGINT, SIGPIPE, SIGTERM};
+use libc::{SIGINT, SIGPIPE, SIGTERM, SIG_DFL};
 use std::io::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -44,9 +44,7 @@ impl SignalHandler {
 
                 loop {
                     let mut sig: libc::c_int = 0;
-                    let ret = unsafe {
-                        libc::sigwait(&mut sigset, &mut sig)
-                    };
+                    let ret = unsafe { libc::sigwait(&mut sigset, &mut sig) };
 
                     if ret != 0 {
                         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -59,11 +57,7 @@ impl SignalHandler {
                             info!("[signal] got sigpipe, ignored");
                         }
                         SIGTERM | SIGINT => {
-                            let sig_name = if sig == SIGTERM {
-                                "sigterm"
-                            } else {
-                                "sigint"
-                            };
+                            let sig_name = if sig == SIGTERM { "sigterm" } else { "sigint" };
                             info!("[signal] got {}, exit", sig_name);
                             running.store(false, Ordering::Relaxed);
                             break;
