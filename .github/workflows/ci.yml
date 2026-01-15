@@ -1,4 +1,4 @@
-name: CI / Build
+name: CI
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # 代码检查和测试
+  # 代码检查
   check:
     runs-on: ubuntu-latest
     steps:
@@ -34,57 +34,25 @@ jobs:
       - name: Run tests
         run: cargo test --release
 
-  # 多平台交叉编译
+  # 交叉编译 (Linux only - 避免 macOS/Windows runner 限制)
   build:
     needs: check
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         target:
-          # Linux musl (静态链接)
           - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-musl
           - armv7-unknown-linux-musleabihf
-          - armv7-unknown-linux-gnueabihf
-          # Linux GNU
           - x86_64-unknown-linux-gnu
-          # MIPS (OpenWRT)
-          - mips-unknown-linux-gnu
           - mipsel-unknown-linux-gnu
-          # Windows
-          - x86_64-pc-windows-gnu
-          # macOS
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-        include:
-          - target: x86_64-unknown-linux-musl
-            runner: ubuntu-latest
-          - target: aarch64-unknown-linux-musl
-            runner: ubuntu-latest
-          - target: armv7-unknown-linux-musleabihf
-            runner: ubuntu-latest
-          - target: armv7-unknown-linux-gnueabihf
-            runner: ubuntu-latest
-          - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
-          - target: mips-unknown-linux-gnu
-            runner: ubuntu-latest
-          - target: mipsel-unknown-linux-gnu
-            runner: ubuntu-latest
-          - target: x86_64-pc-windows-gnu
-            runner: ubuntu-latest
-          - target: x86_64-apple-darwin
-            runner: macos-latest
-          - target: aarch64-apple-darwin
-            runner: macos-latest
-
-    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build with cargo-cross
+      - name: Build
         uses: zijiren233/cargo-cross@v1
         with:
           command: build
@@ -97,69 +65,50 @@ jobs:
         with:
           name: ${{ matrix.target }}
           path: target/${{ matrix.target }}/release/tinymapper*
-          retention-days: 7
+          retention-days: 1
 
-  # 发布构建
-  release:
+  # macOS 独立构建
+  build-macos:
     needs: check
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
-          - armv7-unknown-linux-gnueabihf
-          - x86_64-unknown-linux-gnu
-          - mips-unknown-linux-gnu
-          - mipsel-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Build with cargo-cross
+      - name: Build macOS
         uses: zijiren233/cargo-cross@v1
         with:
           command: build
-          targets: ${{ matrix.target }}
+          targets: |
+            x86_64-apple-darwin
+            aarch64-apple-darwin
           profile: release
-          args: --locked
 
-      - name: Rename binary
-        run: |
-          mv target/${{ matrix.target }}/release/tinymapper target/${{ matrix.target }}/release/tinymapper-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}
-
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          files: target/${{ matrix.target }}/release/tinymapper-${{ steps.version.outputs.VERSION }}-${{ matrix.target }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: macOS
+          path: target/*/release/tinymapper*
+          retention-days: 1
 
-  # 合并所有构建产物
-  collect:
-    needs: build
+  # Windows 独立构建
+  build-windows:
+    needs: check
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Create release archive
-        run: |
-          cd artifacts
-          find . -type f -name "tinymapper*" | head -20
-          tar -czf ../tinyPortMapper-rust-binaries.tar.gz *
-          ls -la ../tinyPortMapper-rust-binaries.tar.gz
+      - name: Build Windows
+        uses: zijiren233/cargo-cross@v1
+        with:
+          command: build
+          targets: x86_64-pc-windows-gnu
+          profile: release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows
+          path: target/x86_64-pc-windows-gnu/release/tinymapper.exe
+          retention-days: 1
