@@ -1,0 +1,26 @@
+# === Rust Build ===
+target/
+Cargo.lock
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Generated ===
+src/.generated/
+
+# === Local ===
+*.log
+*.out
+*.exe
+*.pdb
+*.dSYM/
+tinymapper*
+!</dev/null/.gitkeep
+
+# === Testing ===
+coverage/
