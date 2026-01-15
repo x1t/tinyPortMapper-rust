@@ -13,7 +13,7 @@ use std::time::Duration;
 pub struct TcpEndpoint {
     /// 文件描述符
     pub fd64: Fd64,
-    /// 数据缓冲区
+    /// 数据缓冲区 (fallback 用)
     pub data: Vec<u8>,
     /// 缓冲区起始位置
     pub begin: usize,
@@ -55,6 +55,47 @@ impl TcpEndpoint {
     }
 }
 
+/// Splice pipe 对 (用于零拷贝转发)
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone)]
+pub struct SplicePipe {
+    /// pipe 读端
+    pub read_fd: i32,
+    /// pipe 写端
+    pub write_fd: i32,
+    /// pipe 中待发送的数据量
+    pub pending: usize,
+}
+
+#[cfg(target_os = "linux")]
+impl SplicePipe {
+    /// 创建新的 pipe
+    pub fn new(pipe_size: usize) -> Option<Self> {
+        let mut fds: [libc::c_int; 2] = [0; 2];
+        let ret = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_NONBLOCK) };
+        if ret < 0 {
+            return None;
+        }
+        // 设置 pipe 大小
+        unsafe {
+            libc::fcntl(fds[0], libc::F_SETPIPE_SZ, pipe_size as libc::c_int);
+        }
+        Some(Self {
+            read_fd: fds[0],
+            write_fd: fds[1],
+            pending: 0,
+        })
+    }
+
+    /// 关闭 pipe
+    pub fn close(&self) {
+        unsafe {
+            libc::close(self.read_fd);
+            libc::close(self.write_fd);
+        }
+    }
+}
+
 /// TCP 连接对
 #[derive(Debug, Clone)]
 pub struct TcpConnection {
@@ -70,6 +111,12 @@ pub struct TcpConnection {
     pub last_active_time: Arc<AtomicU64>,
     /// 远程端是否仍在连接中（非阻塞连接尚未完成）
     pub remote_connecting: bool,
+    /// local -> remote 方向的 splice pipe
+    #[cfg(target_os = "linux")]
+    pub pipe_l2r: Option<SplicePipe>,
+    /// remote -> local 方向的 splice pipe
+    #[cfg(target_os = "linux")]
+    pub pipe_r2l: Option<SplicePipe>,
 }
 
 impl TcpConnection {
@@ -82,6 +129,13 @@ impl TcpConnection {
         buf_size: usize,
         remote_connecting: bool,
     ) -> Self {
+        // 创建 splice pipes (Linux only)
+        #[cfg(target_os = "linux")]
+        let (pipe_l2r, pipe_r2l) = {
+            let pipe_size = buf_size.max(65536); // 至少 64KB
+            (SplicePipe::new(pipe_size), SplicePipe::new(pipe_size))
+        };
+
         Self {
             local: TcpEndpoint::new(local_fd, buf_size),
             remote: TcpEndpoint::new(remote_fd, buf_size),
@@ -89,6 +143,10 @@ impl TcpConnection {
             create_time,
             last_active_time: Arc::new(AtomicU64::new(create_time)),
             remote_connecting,
+            #[cfg(target_os = "linux")]
+            pipe_l2r,
+            #[cfg(target_os = "linux")]
+            pipe_r2l,
         }
     }
 
@@ -103,6 +161,17 @@ impl TcpConnection {
         let now = crate::log::get_current_time();
         let last = self.last_active_time.load(Ordering::Relaxed);
         Duration::from_millis(now - last)
+    }
+
+    /// 关闭 splice pipes
+    #[cfg(target_os = "linux")]
+    pub fn close_pipes(&self) {
+        if let Some(ref pipe) = self.pipe_l2r {
+            pipe.close();
+        }
+        if let Some(ref pipe) = self.pipe_r2l {
+            pipe.close();
+        }
     }
 }
 
