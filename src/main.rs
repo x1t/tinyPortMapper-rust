@@ -90,7 +90,7 @@ fn print_help() {
         "git version: {}    build date: {} {}",
         GIT_VERSION, BUILD_DATE, BUILD_TIME
     );
-    println!("repository: https://github.com/wangyu-/tinyPortMapper");
+    println!("repository: https://github.com/x1t/tinyPortMapper-rust");
     println!();
     println!("usage:");
     println!(
@@ -322,7 +322,7 @@ fn main() {
                 tinyportmapper::build::BUILD_DATE,
                 tinyportmapper::build::BUILD_TIME
             );
-            println!("repository: https://github.com/wangyu-/tinyPortMapper");
+            println!("repository: https://github.com/x1t/tinyPortMapper-rust");
             myexit(0);
         }
         if arg == "-h" || arg == "--help" {
@@ -389,7 +389,7 @@ fn main() {
         tinyportmapper::build::BUILD_TIME
     );
     println!("git version: {}", tinyportmapper::build::GIT_VERSION);
-    println!("repository: https://github.com/wangyu-/tinyPortMapper");
+    println!("repository: https://github.com/x1t/tinyPortMapper-rust");
     println!();
     println!("==============================");
     println!();
