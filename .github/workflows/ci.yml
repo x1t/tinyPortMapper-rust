@@ -48,13 +48,13 @@ jobs:
       - name: Package binaries
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf tinymapper-${{ matrix.target }}.tar.gz tinymapper
-          mv tinymapper-${{ matrix.target }}.tar.gz ${{ github.workspace }}/
+          tar czf tinyportmapper-${{ matrix.target }}.tar.gz tinyportmapper
+          mv tinyportmapper-${{ matrix.target }}.tar.gz ${{ github.workspace }}/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: tinymapper-${{ matrix.target }}
-          path: tinymapper-${{ matrix.target }}.tar.gz
+          name: tinyportmapper-${{ matrix.target }}
+          path: tinyportmapper-${{ matrix.target }}.tar.gz
           retention-days: 7
 
   release:
