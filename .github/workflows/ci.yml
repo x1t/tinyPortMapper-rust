@@ -39,7 +39,6 @@ jobs:
           command: build
           targets: ${{ matrix.target }}
           profile: release
-          args: --locked
 
       - uses: actions/upload-artifact@v4
         with:
