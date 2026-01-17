@@ -60,8 +60,8 @@ impl TcpHandler {
                 let len = std::cmp::min(interface.len(), libc::IFNAMSIZ - 1);
                 unsafe {
                     std::ptr::copy_nonoverlapping(
-                        interface.as_ptr(),
-                        ifreq.ifr_name.as_mut_ptr(),
+                        interface.as_ptr() as *const libc::c_char,
+                        ifreq.ifr_name.as_mut_ptr() as *mut libc::c_char,
                         len,
                     );
                 }
