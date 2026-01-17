@@ -5,7 +5,7 @@ use crate::event::EventLoop;
 use crate::fd_manager::Fd64;
 use crate::stats::TrafficStats;
 use crate::types::Address;
-use crate::{debug, info, warn};
+use crate::{info, warn};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Interest, Token};
 use std::io;
@@ -61,7 +61,7 @@ impl TcpHandler {
                 unsafe {
                     std::ptr::copy_nonoverlapping(
                         interface.as_ptr(),
-                        ifreq.ifr_name.as_mut_ptr() as *mut u8,
+                        ifreq.ifr_name.as_mut_ptr(),
                         len,
                     );
                 }
