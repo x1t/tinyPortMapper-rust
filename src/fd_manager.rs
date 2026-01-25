@@ -103,6 +103,36 @@ impl FdManager {
         fd64
     }
 
+    /// 获取现有的 Fd64 或创建新的
+    /// 如果 raw_fd 已存在映射，返回现有的 Fd64；否则创建新的
+    pub fn get_or_create(&self, raw_fd: RawFd, create_time: u64) -> Fd64 {
+        // 首先检查是否已存在
+        {
+            let fd_to_fd64 = self.fd_to_fd64.read().expect("RwLock poisoned");
+            if let Some(fd64) = fd_to_fd64.get(&raw_fd) {
+                return *fd64;
+            }
+        }
+
+        // 不存在，创建新的
+        let fd64 = Fd64(self.counter.fetch_add(1, Ordering::Relaxed));
+
+        let mut fd_to_fd64 = self.fd_to_fd64.write().expect("RwLock poisoned");
+        let mut fd64_to_fd = self.fd64_to_fd.write().expect("RwLock poisoned");
+        let mut fd_info = self.fd_info.write().expect("RwLock poisoned");
+
+        // 双重检查，避免并发创建
+        if let Some(existing) = fd_to_fd64.get(&raw_fd) {
+            return *existing;
+        }
+
+        fd_to_fd64.insert(raw_fd, fd64);
+        fd64_to_fd.insert(fd64, raw_fd);
+        fd_info.insert(fd64, FdInfo::new(create_time));
+
+        fd64
+    }
+
     /// 将 Fd64 转换为 RawFd
     pub fn to_fd(&self, fd64: Fd64) -> Option<RawFd> {
         self.fd64_to_fd

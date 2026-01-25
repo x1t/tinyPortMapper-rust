@@ -106,6 +106,16 @@ impl Address {
         }
     }
 
+    /// 获取地址族（用于 socket 创建）
+    ///
+    /// 返回 libc::AF_INET 或 libc::AF_INET6
+    pub fn get_addr_family(&self) -> libc::c_int {
+        match self.addr {
+            SocketAddr::V4(_) => libc::AF_INET,
+            SocketAddr::V6(_) => libc::AF_INET6,
+        }
+    }
+
     /// 获取 sockaddr 长度
     ///
     /// IPv4 返回 16，IPv6 返回 28
@@ -198,17 +208,25 @@ impl Address {
     ///
     /// 创建一个 UDP socket 并连接到当前地址
     /// 返回 raw fd，失败返回 -1
+    /// 对于 IPv4-mapped IPv6 地址，自动使用 IPv4 socket 连接
     #[cfg(unix)]
     pub fn new_connected_udp_fd(
         &self,
         buf_size: usize,
     ) -> Result<std::os::unix::io::RawFd, std::io::Error> {
+        // 检查是否是 IPv4-mapped IPv6 地址，如果是则使用 IPv4 socket
+        let (addr_family, sockaddr, len) = if let Some(ipv4_addr) = self.from_ipv4_mapped_ipv6() {
+            let storage = ipv4_addr.to_sockaddr_storage();
+            let addr_len = ipv4_addr.get_len() as libc::socklen_t;
+            (libc::AF_INET, storage, addr_len)
+        } else {
+            let storage = self.to_sockaddr_storage();
+            let addr_len = self.get_len() as libc::socklen_t;
+            (self.get_addr_family(), storage, addr_len)
+        };
+
         let fd = unsafe {
-            libc::socket(
-                self.get_type() as libc::c_int,
-                libc::SOCK_DGRAM,
-                libc::IPPROTO_UDP,
-            )
+            libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP)
         };
         if fd < 0 {
             return Err(std::io::Error::last_os_error());
@@ -221,8 +239,6 @@ impl Address {
         crate::set_buf_size(fd, buf_size)?;
 
         // 连接到远程地址
-        let sockaddr = self.to_sockaddr_storage();
-        let len = self.get_len() as libc::socklen_t;
         unsafe {
             if libc::connect(fd, &sockaddr as *const _ as *const libc::sockaddr, len) != 0 {
                 libc::close(fd);
@@ -234,17 +250,25 @@ impl Address {
     }
 
     /// 创建已连接的 UDP socket（Windows 版本）
+    /// 对于 IPv4-mapped IPv6 地址，自动使用 IPv4 socket 连接
     #[cfg(windows)]
     pub fn new_connected_udp_fd(
         &self,
         buf_size: usize,
     ) -> Result<std::os::windows::io::RawSocket, std::io::Error> {
+        // 检查是否是 IPv4-mapped IPv6 地址，如果是则使用 IPv4 socket
+        let (addr_family, sockaddr, len) = if let Some(ipv4_addr) = self.from_ipv4_mapped_ipv6() {
+            let storage = ipv4_addr.to_sockaddr_storage();
+            let addr_len = ipv4_addr.get_len() as libc::socklen_t;
+            (libc::AF_INET, storage, addr_len)
+        } else {
+            let storage = self.to_sockaddr_storage();
+            let addr_len = self.get_len() as libc::socklen_t;
+            (self.get_addr_family(), storage, addr_len)
+        };
+
         let fd = unsafe {
-            libc::socket(
-                self.get_type() as libc::c_int,
-                libc::SOCK_DGRAM,
-                libc::IPPROTO_UDP,
-            )
+            libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP)
         };
         if fd < 0 {
             return Err(std::io::Error::last_os_error());
@@ -257,8 +281,6 @@ impl Address {
         crate::set_buf_size(fd, buf_size)?;
 
         // 连接到远程地址
-        let sockaddr = self.to_sockaddr_storage();
-        let len = self.get_len() as libc::socklen_t;
         unsafe {
             if libc::connect(fd, &sockaddr as *const _ as *const libc::sockaddr, len) != 0 {
                 libc::closesocket(fd);

@@ -76,9 +76,10 @@ impl SplicePipe {
         if ret < 0 {
             return None;
         }
-        // 设置 pipe 大小
+        // 设置较大的 pipe 大小以支持高吞吐量
+        let actual_size = pipe_size.max(1024 * 1024); // 至少 1MB
         unsafe {
-            libc::fcntl(fds[0], libc::F_SETPIPE_SZ, pipe_size as libc::c_int);
+            libc::fcntl(fds[0], libc::F_SETPIPE_SZ, actual_size as libc::c_int);
         }
         Some(Self {
             read_fd: fds[0],

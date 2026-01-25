@@ -15,6 +15,7 @@ use crate::manager::{TcpConnectionManager, UdpSessionManager};
 use crate::stats::TrafficStats;
 
 use crate::info;
+use crate::trace;
 use mio::net::{TcpListener, UdpSocket};
 use mio::{Events, Interest, Poll, Token};
 use std::collections::HashMap;
@@ -276,22 +277,25 @@ impl EventLoop {
                 };
 
                 if let Some(fd64) = fd64 {
-                    debug!("[event] processing token={:?}, fd64={:?}", token, fd64);
+                    trace!("[event] processing token={:?}, fd64={:?}", token, fd64);
                     if !self.fd_manager.exist(fd64) {
-                        debug!("[event] fd64 does not exist, skipping");
+                        trace!("[event] fd64 does not exist, skipping");
                         continue;
                     }
 
                     if event.is_readable() {
                         // 使用 O(1) 查找判断是否是 UDP 会话
                         let is_udp = self.udp_manager.get_session_by_fd64(&fd64).is_some();
+                        trace!("[event] token={:?} readable, is_udp={}", token, is_udp);
 
                         if is_udp {
                             let handler = self.udp_handler.read().expect("RwLock poisoned");
                             let _ = handler.on_response(self, token, fd64);
                         } else {
+                            debug!("[event] calling tcp_handler.on_read for token={:?}, fd64={:?}", token, fd64);
                             let handler = self.tcp_handler.read().expect("RwLock poisoned");
-                            let _ = handler.on_read(self, token, fd64);
+                            let result = handler.on_read(self, token, fd64);
+                            debug!("[event] tcp_handler.on_read returned {:?}", result);
                         }
                     }
 

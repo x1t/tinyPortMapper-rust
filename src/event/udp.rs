@@ -4,6 +4,7 @@
 
 use crate::info;
 use crate::warn;
+use crate::trace;
 
 use crate::config::FwdType;
 use crate::event::EventLoop;
@@ -235,6 +236,7 @@ impl UdpHandler {
         }
 
         let session_arc = if let Some(existing) = udp_manager.get_session(&src_address) {
+            trace!("[udp] found existing session for {}", src_addr_s);
             existing
         } else {
             if udp_manager.len() >= event_loop.config.max_connections {
@@ -245,59 +247,41 @@ impl UdpHandler {
                 return Ok(());
             }
 
-            // 使用翻译后的地址创建已连接的 UDP socket
+            // 与 Go 版本保持一致：使用 Address::new_connected_udp_fd 创建已连接的 UDP socket
+            // 这样可以正确处理 IPv4/IPv6 地址转换
             let remote_addr_for_connect = self.get_remote_addr_for_connect();
-            let remote_addr_family = self.get_remote_addr_family();
-            let udp_fd = unsafe {
-                let fd = libc::socket(remote_addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP);
-                if fd < 0 {
+            let udp_fd = match remote_addr_for_connect.new_connected_udp_fd(self.socket_buf_size) {
+                Ok(fd) => fd,
+                Err(e) => {
                     info!(
-                        "[udp] create udp socket failed for {}: {}",
+                        "[udp] create connected udp socket failed for {} -> {}: {}",
                         src_addr_s,
-                        crate::get_sock_error()
+                        remote_addr_for_connect,
+                        e
                     );
                     return Ok(());
                 }
-
-                // 设置接口绑定 (SO_BINDTODEVICE)
-                if let Err(e) = self.set_bind_to_device(fd) {
-                    info!("[udp] failed to bind to interface: {}", e);
-                }
-
-                // 设置非阻塞
-                crate::set_nonblocking(fd)?;
-
-                // 设置缓冲区大小
-                crate::set_buf_size(fd, self.socket_buf_size)?;
-
-                // 如果启用分片转发，设置相关 socket 选项
-                if self.enable_fragment {
-                    self.setup_fragment_socket_options(fd)?;
-                }
-
-                // 连接到远程地址
-                let sockaddr = remote_addr_for_connect.to_sockaddr_storage();
-                let len = remote_addr_for_connect.get_len() as libc::socklen_t;
-                if libc::connect(fd, &sockaddr as *const _ as *const libc::sockaddr, len) != 0 {
-                    libc::close(fd);
-                    info!(
-                        "[udp] connect failed for {}: {}",
-                        src_addr_s,
-                        crate::get_sock_error()
-                    );
-                    return Ok(());
-                }
-
-                fd
             };
 
             let now = crate::log::get_current_time();
-            let fd64 = fd_manager.create(udp_fd, now);
+
+            // 添加 remote socket 的 fd 到 fd_manager
+            let remote_fd64 = fd_manager.create(udp_fd, now);
+
+            // 添加 listen socket 的 fd 到 fd_manager（如果尚未添加）
+            let listen_raw_fd = listen_socket.as_raw_fd();
+            let listen_fd64 = fd_manager.get_or_create(listen_raw_fd, now);
+            trace!(
+                "[udp] session for {}, listen_fd={}, listen_fd64={:?}",
+                src_addr_s,
+                listen_raw_fd,
+                listen_fd64
+            );
 
             let poll = &event_loop.poll;
             let token_manager = &event_loop.token_manager;
             let mut token_manager_guard = token_manager.write().expect("token_manager poisoned");
-            let tok = token_manager_guard.generate_token(fd64);
+            let tok = token_manager_guard.generate_token(remote_fd64);
 
             // 创建 UdpSocket 用于注册（不获取所有权）
             #[cfg(unix)]
@@ -305,17 +289,22 @@ impl UdpHandler {
             #[cfg(windows)]
             let mut remote_socket =
                 unsafe { UdpSocket::from_raw_socket(udp_fd as std::os::windows::io::RawSocket) };
-            poll.registry()
-                .register(&mut remote_socket, tok, mio::Interest::READABLE)?;
+            if let Err(e) = poll.registry().register(&mut remote_socket, tok, mio::Interest::READABLE) {
+                warn!("[udp] failed to register remote socket: {}", e);
+                unsafe { libc::close(udp_fd) };
+                return Ok(());
+            }
+            trace!("[udp] registered remote socket with token {:?}", tok);
             #[cfg(unix)]
             let _ = remote_socket.into_raw_fd(); // 防止 drop 时关闭
             #[cfg(windows)]
             let _ = remote_socket.into_raw_socket(); // 防止 drop 时关闭
 
+            // 使用 get_or_create 返回的 listen_fd64
             let session = udp_manager.new_session(
                 src_address.clone(),
-                fd64,
-                Fd64(listen_socket.as_raw_fd() as u64),
+                remote_fd64,
+                listen_fd64,
                 src_addr_s.clone(),
                 now,
             );
@@ -375,6 +364,7 @@ impl UdpHandler {
         let udp_manager = &event_loop.udp_manager;
 
         if !fd_manager.exist(fd64) {
+            trace!("[udp] on_response: fd64 {:?} does not exist", fd64);
             return Ok(());
         }
 
@@ -383,6 +373,7 @@ impl UdpHandler {
             None => return Ok(()),
         };
 
+        trace!("[udp] on_response: reading from fd {}", fd);
         let mut buf = vec![0u8; MAX_DATA_LEN_UDP + 1];
         let recv_len =
             unsafe { libc::recv(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len(), 0) };
@@ -397,8 +388,11 @@ impl UdpHandler {
         }
 
         if recv_len == 0 {
+            trace!("[udp] on_response: recv_len = 0, no data");
             return Ok(());
         }
+
+        trace!("[udp] on_response: received {} bytes from remote", recv_len);
 
         // 检查是否超大包（类似C++版本的处理）
         if recv_len == (MAX_DATA_LEN_UDP + 1) as isize {
@@ -415,7 +409,10 @@ impl UdpHandler {
         // 使用 O(1) 查找获取会话
         let session_arc = match udp_manager.get_session_by_fd64(&fd64) {
             Some(s) => s,
-            None => return Ok(()),
+            None => {
+                warn!("[udp] on_response: no session found for fd64 {:?}", fd64);
+                return Ok(());
+            }
         };
 
         let (listen_fd, dest_addr, session_addr) = {
@@ -428,8 +425,15 @@ impl UdpHandler {
 
         let listen_raw_fd = match fd_manager.to_fd(listen_fd) {
             Some(fd) => fd,
-            None => return Ok(()),
+            None => {
+                warn!("[udp] on_response: listen_fd not found");
+                return Ok(());
+            }
         };
+
+        trace!("[udp] on_response: sending {} bytes to client {} via listen_fd {}",
+               recv_len, session_addr, listen_raw_fd);
+
         let dest_sockaddr = dest_addr.to_sockaddr_storage();
         let sockaddr_len = dest_addr.get_len() as libc::socklen_t;
 
@@ -437,7 +441,7 @@ impl UdpHandler {
             libc::sendto(
                 listen_raw_fd,
                 buf.as_ptr() as *const libc::c_void,
-                buf.len(),
+                recv_len as usize,
                 0,
                 &dest_sockaddr as *const _ as *const libc::sockaddr,
                 sockaddr_len,
