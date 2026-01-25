@@ -225,9 +225,7 @@ impl Address {
             (self.get_addr_family(), storage, addr_len)
         };
 
-        let fd = unsafe {
-            libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP)
-        };
+        let fd = unsafe { libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP) };
         if fd < 0 {
             return Err(std::io::Error::last_os_error());
         }
@@ -267,9 +265,7 @@ impl Address {
             (self.get_addr_family(), storage, addr_len)
         };
 
-        let fd = unsafe {
-            libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP)
-        };
+        let fd = unsafe { libc::socket(addr_family, libc::SOCK_DGRAM, libc::IPPROTO_UDP) };
         if fd < 0 {
             return Err(std::io::Error::last_os_error());
         }

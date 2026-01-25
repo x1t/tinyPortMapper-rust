@@ -3,8 +3,8 @@
 //! 处理 UDP 数据包的所有事件
 
 use crate::info;
-use crate::warn;
 use crate::trace;
+use crate::warn;
 
 use crate::config::FwdType;
 use crate::event::EventLoop;
@@ -255,9 +255,7 @@ impl UdpHandler {
                 Err(e) => {
                     info!(
                         "[udp] create connected udp socket failed for {} -> {}: {}",
-                        src_addr_s,
-                        remote_addr_for_connect,
-                        e
+                        src_addr_s, remote_addr_for_connect, e
                     );
                     return Ok(());
                 }
@@ -289,7 +287,10 @@ impl UdpHandler {
             #[cfg(windows)]
             let mut remote_socket =
                 unsafe { UdpSocket::from_raw_socket(udp_fd as std::os::windows::io::RawSocket) };
-            if let Err(e) = poll.registry().register(&mut remote_socket, tok, mio::Interest::READABLE) {
+            if let Err(e) =
+                poll.registry()
+                    .register(&mut remote_socket, tok, mio::Interest::READABLE)
+            {
                 warn!("[udp] failed to register remote socket: {}", e);
                 unsafe { libc::close(udp_fd) };
                 return Ok(());
@@ -431,8 +432,12 @@ impl UdpHandler {
             }
         };
 
-        trace!("[udp] on_response: sending {} bytes to client {} via listen_fd {}",
-               recv_len, session_addr, listen_raw_fd);
+        trace!(
+            "[udp] on_response: sending {} bytes to client {} via listen_fd {}",
+            recv_len,
+            session_addr,
+            listen_raw_fd
+        );
 
         let dest_sockaddr = dest_addr.to_sockaddr_storage();
         let sockaddr_len = dest_addr.get_len() as libc::socklen_t;

@@ -292,7 +292,10 @@ impl EventLoop {
                             let handler = self.udp_handler.read().expect("RwLock poisoned");
                             let _ = handler.on_response(self, token, fd64);
                         } else {
-                            debug!("[event] calling tcp_handler.on_read for token={:?}, fd64={:?}", token, fd64);
+                            debug!(
+                                "[event] calling tcp_handler.on_read for token={:?}, fd64={:?}",
+                                token, fd64
+                            );
                             let handler = self.tcp_handler.read().expect("RwLock poisoned");
                             let result = handler.on_read(self, token, fd64);
                             debug!("[event] tcp_handler.on_read returned {:?}", result);

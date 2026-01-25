@@ -6,7 +6,7 @@ use crate::fd_manager::Fd64;
 use crate::manager::TcpConnectionManager;
 use crate::stats::TrafficStats;
 use crate::types::Address;
-use crate::{info, warn, debug};
+use crate::{debug, info, warn};
 use mio::net::{TcpListener, TcpStream};
 use mio::{Interest, Token};
 use std::io;
@@ -61,7 +61,13 @@ impl TcpHandler {
                     );
                 }
                 let ret = unsafe {
-                    libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_BINDTODEVICE, &ifreq as *const _ as *const libc::c_void, std::mem::size_of::<libc::ifreq>() as libc::socklen_t)
+                    libc::setsockopt(
+                        fd,
+                        libc::SOL_SOCKET,
+                        libc::SO_BINDTODEVICE,
+                        &ifreq as *const _ as *const libc::c_void,
+                        std::mem::size_of::<libc::ifreq>() as libc::socklen_t,
+                    )
                 };
                 if ret < 0 {
                     return Err(std::io::Error::last_os_error());
@@ -73,8 +79,14 @@ impl TcpHandler {
 
     fn get_remote_addr_for_connect(&self) -> Address {
         match self.fwd_type {
-            FwdType::FwdType4to6 => self.remote_addr.to_ipv4_mapped_ipv6().unwrap_or_else(|| self.remote_addr.clone()),
-            FwdType::FwdType6to4 => self.remote_addr.from_ipv4_mapped_ipv6().unwrap_or_else(|| self.remote_addr.clone()),
+            FwdType::FwdType4to6 => self
+                .remote_addr
+                .to_ipv4_mapped_ipv6()
+                .unwrap_or_else(|| self.remote_addr.clone()),
+            FwdType::FwdType6to4 => self
+                .remote_addr
+                .from_ipv4_mapped_ipv6()
+                .unwrap_or_else(|| self.remote_addr.clone()),
             _ => self.remote_addr.clone(),
         }
     }
@@ -83,7 +95,13 @@ impl TcpHandler {
         match self.fwd_type {
             FwdType::FwdType4to6 => libc::AF_INET6,
             FwdType::FwdType6to4 => libc::AF_INET,
-            _ => if self.remote_addr.get_type() == 4 { libc::AF_INET } else { libc::AF_INET6 },
+            _ => {
+                if self.remote_addr.get_type() == 4 {
+                    libc::AF_INET
+                } else {
+                    libc::AF_INET6
+                }
+            }
         }
     }
 
@@ -93,15 +111,38 @@ impl TcpHandler {
             libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK);
             let bufsize = self.socket_buf_size as libc::c_int;
             let buflen = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
-            libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_SNDBUF, &bufsize as *const _ as *const libc::c_void, buflen);
-            libc::setsockopt(fd, libc::SOL_SOCKET, libc::SO_RCVBUF, &bufsize as *const _ as *const libc::c_void, buflen);
+            libc::setsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_SNDBUF,
+                &bufsize as *const _ as *const libc::c_void,
+                buflen,
+            );
+            libc::setsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_RCVBUF,
+                &bufsize as *const _ as *const libc::c_void,
+                buflen,
+            );
             let nodelay: libc::c_int = 1;
-            libc::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_NODELAY, &nodelay as *const _ as *const libc::c_void, std::mem::size_of::<libc::c_int>() as libc::socklen_t);
+            libc::setsockopt(
+                fd,
+                libc::IPPROTO_TCP,
+                libc::TCP_NODELAY,
+                &nodelay as *const _ as *const libc::c_void,
+                std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+            );
         }
         Ok(())
     }
 
-    pub fn on_accept(&self, event_loop: &EventLoop, _token: Token, listener: &mut TcpListener) -> Result<(), std::io::Error> {
+    pub fn on_accept(
+        &self,
+        event_loop: &EventLoop,
+        _token: Token,
+        listener: &mut TcpListener,
+    ) -> Result<(), std::io::Error> {
         let tcp_manager = &event_loop.tcp_manager;
         let poll = &event_loop.poll;
         let token_manager = &event_loop.token_manager;
@@ -136,8 +177,15 @@ impl TcpHandler {
         };
 
         let sockaddr = remote_addr_for_connect.to_sockaddr_storage();
-        let ret = unsafe { libc::connect(remote_fd, &sockaddr as *const _ as *const libc::sockaddr, remote_addr_for_connect.get_len() as libc::socklen_t) };
-        let remote_connecting = ret != 0 && unsafe { *libc::__errno_location() } == libc::EINPROGRESS;
+        let ret = unsafe {
+            libc::connect(
+                remote_fd,
+                &sockaddr as *const _ as *const libc::sockaddr,
+                remote_addr_for_connect.get_len() as libc::socklen_t,
+            )
+        };
+        let remote_connecting =
+            ret != 0 && unsafe { *libc::__errno_location() } == libc::EINPROGRESS;
 
         let now = crate::log::get_current_time();
         let fd_manager = &event_loop.fd_manager;
@@ -146,22 +194,49 @@ impl TcpHandler {
 
         let mut tm = token_manager.write().expect("poisoned");
         let local_token = tm.generate_token(local_fd64);
-        poll.registry().register(&mut stream, local_token, Interest::READABLE)?;
+        poll.registry()
+            .register(&mut stream, local_token, Interest::READABLE)?;
         let _ = stream.into_raw_fd();
 
         let remote_token = tm.generate_token(remote_fd64);
         let mut remote_stream = unsafe { TcpStream::from_raw_fd(remote_fd) };
-        poll.registry().register(&mut remote_stream, remote_token, if remote_connecting { Interest::READABLE | Interest::WRITABLE } else { Interest::READABLE })?;
+        poll.registry().register(
+            &mut remote_stream,
+            remote_token,
+            if remote_connecting {
+                Interest::READABLE | Interest::WRITABLE
+            } else {
+                Interest::READABLE
+            },
+        )?;
         let _ = remote_stream.into_raw_fd();
 
-        tcp_manager.new_connection(local_fd64, remote_fd64, client_addr.clone(), now, self.socket_buf_size, remote_connecting);
+        tcp_manager.new_connection(
+            local_fd64,
+            remote_fd64,
+            client_addr.clone(),
+            now,
+            self.socket_buf_size,
+            remote_connecting,
+        );
         TrafficStats::global().inc_tcp_connections();
 
-        info!("[tcp] new connection from {}, fd1={}, fd2={}, tcp connections={}", client_addr, fd, remote_fd, tcp_manager.len());
+        info!(
+            "[tcp] new connection from {}, fd1={}, fd2={}, tcp connections={}",
+            client_addr,
+            fd,
+            remote_fd,
+            tcp_manager.len()
+        );
         Ok(())
     }
 
-    pub fn on_read(&self, event_loop: &EventLoop, _token: Token, fd64: Fd64) -> Result<(), std::io::Error> {
+    pub fn on_read(
+        &self,
+        event_loop: &EventLoop,
+        _token: Token,
+        fd64: Fd64,
+    ) -> Result<(), std::io::Error> {
         debug!("[tcp] on_read ENTRY fd64={:?}", fd64);
         let fd_manager = &event_loop.fd_manager;
         let tcp_manager = &event_loop.tcp_manager;
@@ -181,7 +256,10 @@ impl TcpHandler {
 
         debug!("[tcp] on_read: got connection arc");
         let conn = conn_arc.read().expect("poisoned");
-        debug!("[tcp] on_read: got read lock, remote_connecting={}", conn.remote_connecting);
+        debug!(
+            "[tcp] on_read: got read lock, remote_connecting={}",
+            conn.remote_connecting
+        );
 
         if fd64 == conn.remote.fd64 && conn.remote_connecting {
             drop(conn);
@@ -215,7 +293,10 @@ impl TcpHandler {
         let poll = &event_loop.poll;
         let token_manager = &event_loop.token_manager;
 
-        debug!("[tcp] on_read: is_local={}, remote_connecting={}", is_local, remote_still_connecting);
+        debug!(
+            "[tcp] on_read: is_local={}, remote_connecting={}",
+            is_local, remote_still_connecting
+        );
 
         if is_local {
             // local -> remote
@@ -224,7 +305,10 @@ impl TcpHandler {
             loop {
                 // 1. 发送 pending 数据
                 if conn.remote.data_len > 0 && !remote_still_connecting {
-                    debug!("[tcp] local: sending {} pending bytes", conn.remote.data_len);
+                    debug!(
+                        "[tcp] local: sending {} pending bytes",
+                        conn.remote.data_len
+                    );
                     let sent = unsafe {
                         libc::send(
                             other_fd,
@@ -296,10 +380,7 @@ impl TcpHandler {
                 // 3. 发送到 remote
                 if remote_still_connecting {
                     // 连接尚未建立，缓冲数据
-                    debug!(
-                        "[tcp] local: buffering {} bytes (connecting)",
-                        recv_len
-                    );
+                    debug!("[tcp] local: buffering {} bytes (connecting)", recv_len);
                     conn.remote.data_len = recv_len as usize;
                     conn.remote.begin = 0;
                     // 不能发送，等待连接建立
@@ -346,7 +427,10 @@ impl TcpHandler {
                 }
             }
 
-            debug!("[tcp] local: exiting loop, pending={}", conn.remote.data_len);
+            debug!(
+                "[tcp] local: exiting loop, pending={}",
+                conn.remote.data_len
+            );
 
             // 如果有待发送数据，注册 WRITE 事件
             if conn.remote.data_len > 0 && !remote_still_connecting {
@@ -483,8 +567,9 @@ impl TcpHandler {
     #[inline]
     fn do_recv(fd: RawFd, data: &mut [u8]) -> isize {
         // 直接尝试读取数据
-        let real_recv = unsafe { libc::recv(fd, data.as_mut_ptr() as *mut libc::c_void, data.len(), 0) };
-        
+        let real_recv =
+            unsafe { libc::recv(fd, data.as_mut_ptr() as *mut libc::c_void, data.len(), 0) };
+
         if real_recv < 0 {
             let e = std::io::Error::last_os_error();
             if e.kind() == io::ErrorKind::WouldBlock {
@@ -493,11 +578,11 @@ impl TcpHandler {
             // 其他错误
             return -1;
         }
-        
+
         if real_recv == 0 {
             return -2; // EOF - 对端关闭连接
         }
-        
+
         real_recv
     }
 
@@ -512,8 +597,16 @@ impl TcpHandler {
         addr_s: &str,
         tcp_manager: &TcpConnectionManager,
     ) {
-        if let Some(f) = fd_manager.close(fd64) { unsafe { libc::close(f); } }
-        if let Some(f) = fd_manager.close(other_fd64) { unsafe { libc::close(f); } }
+        if let Some(f) = fd_manager.close(fd64) {
+            unsafe {
+                libc::close(f);
+            }
+        }
+        if let Some(f) = fd_manager.close(other_fd64) {
+            unsafe {
+                libc::close(f);
+            }
+        }
 
         let mut s1 = unsafe { TcpStream::from_raw_fd(my_fd) };
         poll.registry().deregister(&mut s1).ok();
@@ -523,7 +616,11 @@ impl TcpHandler {
         poll.registry().deregister(&mut s2).ok();
         let _ = s2.into_raw_fd();
 
-        info!("[tcp] closed connection {} cleared, tcp connections={}", addr_s, tcp_manager.len());
+        info!(
+            "[tcp] closed connection {} cleared, tcp connections={}",
+            addr_s,
+            tcp_manager.len()
+        );
         TrafficStats::global().dec_tcp_connections();
 
         let mut tm = token_manager.write().expect("poisoned");
@@ -531,20 +628,40 @@ impl TcpHandler {
         tm.remove(&other_fd64);
     }
 
-    fn handle_connect_finish(&self, event_loop: &EventLoop, fd64: Fd64, fd_manager: &crate::fd_manager::FdManager, tcp_manager: &TcpConnectionManager) -> Result<(), std::io::Error> {
+    fn handle_connect_finish(
+        &self,
+        event_loop: &EventLoop,
+        fd64: Fd64,
+        fd_manager: &crate::fd_manager::FdManager,
+        tcp_manager: &TcpConnectionManager,
+    ) -> Result<(), std::io::Error> {
         let fd = match fd_manager.to_fd(fd64) {
             Some(f) => f,
             None => {
-                debug!("[tcp] handle_connect_finish: fd not found for fd64={:?}", fd64);
+                debug!(
+                    "[tcp] handle_connect_finish: fd not found for fd64={:?}",
+                    fd64
+                );
                 return Ok(());
             }
         };
 
         let mut err: libc::c_int = 0;
         let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
-        unsafe { libc::getsockopt(fd, libc::SOL_SOCKET, libc::SO_ERROR, &mut err as *mut _ as *mut libc::c_void, &mut len); }
+        unsafe {
+            libc::getsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_ERROR,
+                &mut err as *mut _ as *mut libc::c_void,
+                &mut len,
+            );
+        }
 
-        debug!("[tcp] handle_connect_finish: fd64={:?}, fd={}, SO_ERROR={}", fd64, fd, err);
+        debug!(
+            "[tcp] handle_connect_finish: fd64={:?}, fd={}, SO_ERROR={}",
+            fd64, fd, err
+        );
 
         let conn_arc = match tcp_manager.get_connection_by_any_fd(&fd64) {
             Some(c) => c,
@@ -558,11 +675,16 @@ impl TcpHandler {
             {
                 let mut conn = conn_arc.write().expect("poisoned");
                 conn.remote_connecting = false;
-                debug!("[tcp] handle_connect_finish: connection established, remote_connecting=false");
+                debug!(
+                    "[tcp] handle_connect_finish: connection established, remote_connecting=false"
+                );
 
                 // 如果有缓冲的数据，立即尝试发送
                 if conn.local.data_len > 0 {
-                    debug!("[tcp] handle_connect_finish: {} buffered bytes ready to send", conn.local.data_len);
+                    debug!(
+                        "[tcp] handle_connect_finish: {} buffered bytes ready to send",
+                        conn.local.data_len
+                    );
                 }
             }
 
@@ -575,40 +697,82 @@ impl TcpHandler {
             };
             let conn = conn_arc.read().expect("poisoned");
             let local_fd64 = conn.local.fd64;
-            let local_token = token_manager.read().expect("poisoned").get_token(&local_fd64);
+            let local_token = token_manager
+                .read()
+                .expect("poisoned")
+                .get_token(&local_fd64);
             drop(conn);
 
             // reregister remote socket
             if let Some(tok) = token_manager.read().expect("poisoned").get_token(&fd64) {
                 let mut s = unsafe { TcpStream::from_raw_fd(fd) };
-                debug!("[tcp] handle_connect_finish: reregistering remote fd64={:?} with READABLE", fd64);
-                event_loop.poll.registry().reregister(&mut s, tok, Interest::READABLE).ok();
+                debug!(
+                    "[tcp] handle_connect_finish: reregistering remote fd64={:?} with READABLE",
+                    fd64
+                );
+                event_loop
+                    .poll
+                    .registry()
+                    .reregister(&mut s, tok, Interest::READABLE)
+                    .ok();
                 let _ = s.into_raw_fd();
             }
 
             // 优先调用 local socket 的 on_read 来发送缓冲的数据
             if let Some(tok) = local_token {
-                debug!("[tcp] handle_connect_finish: calling on_read for local fd64={:?}", local_fd64);
+                debug!(
+                    "[tcp] handle_connect_finish: calling on_read for local fd64={:?}",
+                    local_fd64
+                );
                 return self.on_read(event_loop, tok, local_fd64);
             }
 
-            debug!("[tcp] handle_connect_finish: calling on_read for remote fd64={:?}", fd64);
-            return self.on_read(event_loop, token_manager.read().expect("poisoned").get_token(&fd64).unwrap(), fd64);
+            debug!(
+                "[tcp] handle_connect_finish: calling on_read for remote fd64={:?}",
+                fd64
+            );
+            return self.on_read(
+                event_loop,
+                token_manager
+                    .read()
+                    .expect("poisoned")
+                    .get_token(&fd64)
+                    .unwrap(),
+                fd64,
+            );
         }
 
-        debug!("[tcp] handle_connect_finish: connection failed, err={}", err);
+        debug!(
+            "[tcp] handle_connect_finish: connection failed, err={}",
+            err
+        );
         let conn = conn_arc.read().expect("poisoned");
         let addr_s = conn.addr_s.clone();
         let other_fd64 = conn.local.fd64;
         let other_fd = fd_manager.to_fd(other_fd64).unwrap_or(-1);
         drop(conn);
 
-        Self::close_conn(&event_loop.poll, &event_loop.token_manager, fd_manager, fd64, other_fd64, fd, other_fd, &addr_s, tcp_manager);
+        Self::close_conn(
+            &event_loop.poll,
+            &event_loop.token_manager,
+            fd_manager,
+            fd64,
+            other_fd64,
+            fd,
+            other_fd,
+            &addr_s,
+            tcp_manager,
+        );
         tcp_manager.erase(&fd64);
         Ok(())
     }
 
-    pub fn on_write(&self, event_loop: &EventLoop, _token: Token, fd64: Fd64) -> Result<(), std::io::Error> {
+    pub fn on_write(
+        &self,
+        event_loop: &EventLoop,
+        _token: Token,
+        fd64: Fd64,
+    ) -> Result<(), std::io::Error> {
         let fd_manager = &event_loop.fd_manager;
         let tcp_manager = &event_loop.tcp_manager;
 
@@ -647,20 +811,41 @@ impl TcpHandler {
         };
 
         let addr_s = conn.addr_s.clone();
-        let pending_data_len = if is_local { conn.local.data_len } else { conn.remote.data_len };
+        let pending_data_len = if is_local {
+            conn.local.data_len
+        } else {
+            conn.remote.data_len
+        };
 
         drop(conn);
 
         if pending_data_len > 0 {
             let mut conn = conn_arc.write().expect("poisoned");
             let (data_len, data_begin, data_ptr, fd_to_send) = if is_local {
-                (conn.local.data_len, conn.local.begin, conn.local.data.as_ptr(), my_fd)
+                (
+                    conn.local.data_len,
+                    conn.local.begin,
+                    conn.local.data.as_ptr(),
+                    my_fd,
+                )
             } else {
-                (conn.remote.data_len, conn.remote.begin, conn.remote.data.as_ptr(), my_fd)
+                (
+                    conn.remote.data_len,
+                    conn.remote.begin,
+                    conn.remote.data.as_ptr(),
+                    my_fd,
+                )
             };
 
             if data_len > 0 {
-                let sent = unsafe { libc::send(fd_to_send, data_ptr.add(data_begin) as *const libc::c_void, data_len, 0) };
+                let sent = unsafe {
+                    libc::send(
+                        fd_to_send,
+                        data_ptr.add(data_begin) as *const libc::c_void,
+                        data_len,
+                        0,
+                    )
+                };
                 if sent > 0 {
                     TrafficStats::global().add_tcp_sent(sent as usize);
                     if is_local {
@@ -673,7 +858,17 @@ impl TcpHandler {
                 } else if sent < 0 {
                     let e = std::io::Error::last_os_error();
                     if e.kind() != io::ErrorKind::WouldBlock {
-                        Self::close_conn(&event_loop.poll, &event_loop.token_manager, fd_manager, my_fd64, other_fd64, my_fd, other_fd, &addr_s, tcp_manager);
+                        Self::close_conn(
+                            &event_loop.poll,
+                            &event_loop.token_manager,
+                            fd_manager,
+                            my_fd64,
+                            other_fd64,
+                            my_fd,
+                            other_fd,
+                            &addr_s,
+                            tcp_manager,
+                        );
                         tcp_manager.erase(&fd64);
                         return Ok(());
                     }
@@ -682,7 +877,11 @@ impl TcpHandler {
         }
 
         let conn = conn_arc.read().expect("poisoned");
-        let pending = if is_local { conn.local.data_len } else { conn.remote.data_len };
+        let pending = if is_local {
+            conn.local.data_len
+        } else {
+            conn.remote.data_len
+        };
         drop(conn);
 
         if pending == 0 {
@@ -690,7 +889,9 @@ impl TcpHandler {
             let token_manager = &event_loop.token_manager;
             if let Some(tok) = token_manager.read().expect("poisoned").get_token(&fd64) {
                 let mut s = unsafe { TcpStream::from_raw_fd(my_fd) };
-                poll.registry().reregister(&mut s, tok, Interest::READABLE).ok();
+                poll.registry()
+                    .reregister(&mut s, tok, Interest::READABLE)
+                    .ok();
                 let _ = s.into_raw_fd();
             }
         }
