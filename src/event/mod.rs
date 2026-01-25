@@ -213,7 +213,7 @@ impl EventLoop {
             self.timer.run();
 
             // 处理 EINTR 等被信号中断的情况
-            let poll_result = self.poll.poll(&mut events, Some(Duration::from_secs(1)));
+            let poll_result = self.poll.poll(&mut events, Some(Duration::from_millis(10)));
             // 统计事件数量并打印所有事件
             let event_count = events.iter().count();
             if event_count > 0 {

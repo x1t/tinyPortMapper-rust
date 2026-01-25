@@ -765,9 +765,7 @@ mod random_tests {
         // 多次调用应该生成不同的值（概率极低会相同）
         assert_ne!(v1, v2);
         assert_ne!(v2, v3);
-        // 范围应该在 u32 范围内
-        assert!(v1 <= u32::MAX);
-        assert!(v2 <= u32::MAX);
+        // v1, v2, v3 已经是 u32 类型，无需与 u32::MAX 比较
     }
 
     #[test]
@@ -776,8 +774,7 @@ mod random_tests {
         let v1 = get_fake_random_number_64();
         let v2 = get_fake_random_number_64();
         assert_ne!(v1, v2);
-        assert!(v1 <= u64::MAX);
-        assert!(v2 <= u64::MAX);
+        // v1, v2 已经是 u64 类型，无需与 u64::MAX 比较
     }
 
     #[test]
@@ -810,13 +807,13 @@ mod random_tests {
         // 测试范围
         for _ in 0..100 {
             let r = random_between(10, 20);
-            assert!(r >= 10 && r <= 20, "Value {} out of range", r);
+            assert!((10..=20).contains(&r), "Value {} out of range", r);
         }
 
-        // 测试最大范围
+        // 测试最大范围 (u32::MAX 是 u32 类型能达到的最大值)
         for _ in 0..100 {
             let r = random_between(0, u32::MAX);
-            assert!(r <= u32::MAX);
+            assert!((0..=u32::MAX).contains(&r));
         }
     }
 }
