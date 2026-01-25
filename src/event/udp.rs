@@ -75,6 +75,7 @@ impl UdpHandler {
     }
 
     /// 设置 socket 到指定网络接口 (SO_BINDTODEVICE)
+    #[allow(dead_code)]
     fn set_bind_to_device(&self, fd: libc::c_int) -> Result<(), std::io::Error> {
         if let Some(ref interface) = self.bind_interface {
             if interface.is_empty() {
@@ -126,6 +127,7 @@ impl UdpHandler {
     }
 
     /// 设置分片转发的 socket 选项
+    #[allow(dead_code)]
     fn setup_fragment_socket_options(&self, fd: libc::c_int) -> Result<(), std::io::Error> {
         if !self.enable_fragment {
             return Ok(());
@@ -193,6 +195,7 @@ impl UdpHandler {
     }
 
     /// 获取远程地址类型（用于创建 socket）
+    #[allow(dead_code)]
     fn get_remote_addr_family(&self) -> libc::c_int {
         match self.fwd_type {
             FwdType::FwdType4to6 => libc::AF_INET6,
