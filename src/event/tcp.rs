@@ -586,6 +586,7 @@ impl TcpHandler {
         real_recv
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn close_conn(
         poll: &mio::Poll,
         token_manager: &std::sync::Arc<std::sync::RwLock<super::TokenManager>>,

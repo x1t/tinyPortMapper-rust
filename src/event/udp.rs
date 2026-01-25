@@ -38,6 +38,7 @@ pub struct UdpHandler {
 
 impl UdpHandler {
     /// 创建新的 UDP 处理器
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             remote_addr: Address::from_ipv4(std::net::Ipv4Addr::UNSPECIFIED, 0),
